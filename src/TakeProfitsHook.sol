@@ -106,18 +106,24 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
         bool zeroForOne,
         uint256 inputAmount
     ) external returns (int24) {
+        // Get lower actually usable tick given `tickToSellAt`
         int24 tick = getLowerUsableTick(tickToSellAt, key.tickSpacing);
+        // Create a pending order
         pendingOrders[key.toId()][tick][zeroForOne] += inputAmount;
 
+        // Mint claim tokens to user equal to their `inputAmount`
         uint256 positionId = getPositionId(key, tick, zeroForOne);
         claimTokensSupply[positionId] += inputAmount;
         _mint(msg.sender, positionId, inputAmount, "");
 
+        // Depending on direction of swap, we select the proper input token
+        // and request a transfer of those tokens to the hook contract
         address sellToken = zeroForOne
             ? Currency.unwrap(key.currency0)
             : Currency.unwrap(key.currency1);
         IERC20(sellToken).transferFrom(msg.sender, address(this), inputAmount);
 
+        // Return the tick at which the order was actually placed
         return tick;
     }
 
@@ -126,16 +132,22 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
         int24 tickToSellAt,
         bool zeroForOne
     ) external {
+        // Get lower actually usable tick for their order
         int24 tick = getLowerUsableTick(tickToSellAt, key.tickSpacing);
         uint256 positionId = getPositionId(key, tick, zeroForOne);
 
+        // Check how many claim tokens they have for this position
         uint256 positionTokens = balanceOf(msg.sender, positionId);
         if (positionTokens == 0) revert InvalidOrder();
 
+        // Remove their `positionTokens` worth of position from pending orders
+        // NOTE: We don't want to zero this out directly because other users may have the same position
         pendingOrders[key.toId()][tick][zeroForOne] -= positionTokens;
+        // Reduce claim token total supply and burn their share
         claimTokensSupply[positionId] -= positionTokens;
         _burn(msg.sender, positionId, positionTokens);
 
+        // Send them their input token
         Currency token = zeroForOne ? key.currency0 : key.currency1;
         token.transfer(msg.sender, positionTokens);
     }
@@ -146,26 +158,35 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
         bool zeroForOne,
         uint256 inputAmountToClaimFor
     ) external {
+        // Get lower actually usable tick for their order
         int24 tick = getLowerUsableTick(tickToSellAt, key.tickSpacing);
         uint256 positionId = getPositionId(key, tick, zeroForOne);
 
+        // If no output tokens can be claimed yet i.e. order hasn't been filled
+        // throw error
         if (claimableOutputTokens[positionId] == 0) revert NothingToClaim();
 
+        // they must have claim tokens >= inputAmountToClaimFor
         uint256 positionTokens = balanceOf(msg.sender, positionId);
         if (positionTokens < inputAmountToClaimFor) revert NotEnoughToClaim();
 
         uint256 totalClaimableForPosition = claimableOutputTokens[positionId];
         uint256 totalInputAmountForPosition = claimTokensSupply[positionId];
 
+        // outputAmount = (inputAmountToClaimFor * totalClaimableForPosition) / (totalInputAmountForPosition)
         uint256 outputAmount = inputAmountToClaimFor.mulDivDown(
             totalClaimableForPosition,
             totalInputAmountForPosition
         );
 
+        // Reduce claimable output tokens amount
+        // Reduce claim token total supply for position
+        // Burn claim tokens
         claimableOutputTokens[positionId] -= outputAmount;
         claimTokensSupply[positionId] -= inputAmountToClaimFor;
         _burn(msg.sender, positionId, inputAmountToClaimFor);
 
+        // Transfer output tokens
         Currency token = zeroForOne ? key.currency1 : key.currency0;
         token.transfer(msg.sender, outputAmount);
     }
@@ -228,22 +249,28 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
         bool zeroForOne,
         uint256 inputAmount
     ) internal {
+        // Do the actual swap and settle all balances
         BalanceDelta delta = swapAndSettleBalances(
             key,
             IPoolManager.SwapParams({
                 zeroForOne: zeroForOne,
+                // We provide a negative value here to signify an "exact input for output" swap
                 amountSpecified: -int256(inputAmount),
+                // No slippage limits (maximum slippage possible)
                 sqrtPriceLimitX96: zeroForOne
                     ? TickMath.MIN_SQRT_RATIO + 1
                     : TickMath.MAX_SQRT_RATIO - 1
             })
         );
 
+        // `inputAmount` has been deducted from this position
         pendingOrders[key.toId()][tick][zeroForOne] -= inputAmount;
         uint256 positionId = getPositionId(key, tick, zeroForOne);
         uint256 outputAmount = zeroForOne
             ? uint256(int256(delta.amount1()))
             : uint256(int256(delta.amount0()));
+
+        // `outputAmount` worth of tokens now can be claimed/redeemed by position holders
         claimableOutputTokens[positionId] += outputAmount;
     }
 
@@ -251,8 +278,11 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
         PoolKey calldata key,
         IPoolManager.SwapParams memory params
     ) internal returns (BalanceDelta) {
+        // Conduct the swap inside the Pool Manager
         BalanceDelta delta = poolManager.swap(key, params, "");
 
+        // If we just did a zeroForOne swap
+        // We need to send Token 0 to PM, and receive Token 1 from PM
         if (params.zeroForOne) {
             // Negative Value => Money leaving user's wallet
             // Settle with PoolManager
@@ -279,11 +309,13 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
     }
 
     function _settle(Currency currency, uint128 amount) internal {
+        // Transfer tokens to PM and let it know
         currency.transfer(address(poolManager), amount);
         poolManager.settle(currency);
     }
 
     function _take(Currency currency, uint128 amount) internal {
+        // Take tokens out of PM to our hook contract
         poolManager.take(currency, address(this), amount);
     }
 

@@ -31,8 +31,6 @@ contract TakeProfitsHookTest is Test, Deployers {
     Currency token0;
     Currency token1;
 
-    // Hardcode the address for our hook instead of deploying it
-    // We will overwrite the storage to replace code at this address with code from the stub
     TakeProfitsHook hook;
 
     function setUp() public {
@@ -116,12 +114,7 @@ contract TakeProfitsHookTest is Test, Deployers {
         uint256,
         bytes calldata
     ) external pure returns (bytes4) {
-        return
-            bytes4(
-                keccak256(
-                    "onERC1155Received(address,address,uint256,uint256,bytes)"
-                )
-            );
+        return this.onERC1155Received.selector;
     }
 
     function onERC1155BatchReceived(
@@ -131,21 +124,15 @@ contract TakeProfitsHookTest is Test, Deployers {
         uint256[] calldata,
         bytes calldata
     ) external pure returns (bytes4) {
-        return
-            bytes4(
-                keccak256(
-                    "onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)"
-                )
-            );
+        return this.onERC1155BatchReceived.selector;
     }
 
     function test_placeOrder() public {
         // Place a zeroForOne take-profit order
         // for 10e18 token0 tokens
         // at tick 100
-
         int24 tick = 100;
-        uint256 amount = 10 ether;
+        uint256 amount = 10e18;
         bool zeroForOne = true;
 
         // Note the original balance of token0 we have
@@ -159,11 +146,10 @@ contract TakeProfitsHookTest is Test, Deployers {
 
         // Since we deployed the pool contract with tick spacing = 60
         // i.e. the tick can only be a multiple of 60
-        // and initially the tick is 0
         // the tickLower should be 60 since we placed an order at tick 100
         assertEq(tickLower, 60);
 
-        // Ensure that our balance was reduced by `amount` tokens
+        // Ensure that our balance of token0 was reduced by `amount` tokens
         assertEq(originalBalance - newBalance, amount);
 
         // Check the balance of ERC-1155 tokens we received
@@ -177,9 +163,9 @@ contract TakeProfitsHookTest is Test, Deployers {
     }
 
     function test_cancelOrder() public {
-        // Place an order similar as earlier, but cancel it later
+        // Place an order as earlier
         int24 tick = 100;
-        uint256 amount = 10 ether;
+        uint256 amount = 10e18;
         bool zeroForOne = true;
 
         uint256 originalBalance = token0.balanceOfSelf();
