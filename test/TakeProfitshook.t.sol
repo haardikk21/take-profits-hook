@@ -346,7 +346,7 @@ contract TakeProfitsHookTest is Test, Deployers {
         hook.placeOrder(key, 0, true, amount);
         hook.placeOrder(key, 60, true, amount);
 
-        // Do a swap to make tick increase to 120
+        // Do a swap to make tick increase
         IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
             zeroForOne: false,
             amountSpecified: -0.5 ether,
@@ -358,7 +358,6 @@ contract TakeProfitsHookTest is Test, Deployers {
         uint256 tokensLeftToSell = hook.pendingOrders(key.toId(), 0, true);
         assertEq(tokensLeftToSell, 0);
 
-        // Order at Tick 60 should still be pending
         tokensLeftToSell = hook.pendingOrders(key.toId(), 60, true);
         assertEq(tokensLeftToSell, 0);
     }
