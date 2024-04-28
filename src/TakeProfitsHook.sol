@@ -93,9 +93,9 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
                 key,
                 !params.zeroForOne
             );
-            lastTicks[key.toId()] = currentTick;
         }
 
+        lastTicks[key.toId()] = currentTick;
         return this.afterSwap.selector;
     }
 
@@ -199,11 +199,13 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
         (, int24 currentTick, , ) = poolManager.getSlot0(key.toId());
         int24 lastTick = lastTicks[key.toId()];
 
-        // Tick has increased i.e. people sold Token 0 to buy Token 1
-        // i.e. Token 1 price has increased
-        // We should check if we have any orders looking to sell Token 1
+        // Tick has increased i.e. people sold Token 1 to buy Token 0
+        // i.e. Token 0 price has increased
+        // We should check if we have any orders looking to sell Token 0
         // at ticks `lastTick` to `currentTick`
-        if (lastTick < currentTick) {
+        if (currentTick > lastTick) {
+            // Loop over all ticks from `lastTick` to `currentTick`
+            // and execute orders that are looking to sell Token 0
             for (
                 int24 tick = lastTick;
                 tick < currentTick;
@@ -214,14 +216,16 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
                 ];
                 if (inputAmount > 0) {
                     executeOrder(key, tick, executeZeroForOne, inputAmount);
-                    (, currentTick, , ) = poolManager.getSlot0(key.toId());
+
+                    // Return true because we may have more orders to execute
+                    // from lastTick to new current tick
                     return (true, currentTick);
                 }
             }
         }
-        // Tick has gone down i.e. people bought Token 0 and sold Token 1
-        // i.e. Token 0 price has increased
-        // We should check if we have any orders looking to sell Token 0
+        // Tick has gone down i.e. people sold Token 0 to buy Token 1
+        // i.e. Token 1 price has increased
+        // We should check if we have any orders looking to sell Token 1
         // at ticks `currentTick` to `lastTick`
         else {
             for (
@@ -234,7 +238,6 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
                 ];
                 if (inputAmount > 0) {
                     executeOrder(key, tick, executeZeroForOne, inputAmount);
-                    (, currentTick, , ) = poolManager.getSlot0(key.toId());
                     return (true, currentTick);
                 }
             }

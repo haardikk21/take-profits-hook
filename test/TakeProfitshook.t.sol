@@ -193,7 +193,7 @@ contract TakeProfitsHookTest is Test, Deployers {
 
     function test_orderExecute_zeroForOne() public {
         int24 tick = 100;
-        uint256 amount = 10 ether;
+        uint256 amount = 1 ether;
         bool zeroForOne = true;
 
         // Place our order at tick 100 for 10e18 token0 tokens
@@ -214,9 +214,11 @@ contract TakeProfitsHookTest is Test, Deployers {
                 currencyAlreadySent: false
             });
 
+        // Conduct the swap - `afterSwap` should also execute our placed order
         swapRouter.swap(key, params, testSettings, ZERO_BYTES);
 
         // Check that the order has been executed
+        // by ensuring no amount is left to sell in the pending orders
         uint256 pendingTokensForPosition = hook.pendingOrders(
             key.toId(),
             tick,
@@ -252,7 +254,7 @@ contract TakeProfitsHookTest is Test, Deployers {
         // Do a separate swap from zeroForOne to make tick go down
         // Sell 1e18 token0 tokens for token1 tokens
         IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
-            zeroForOne: !zeroForOne,
+            zeroForOne: true,
             amountSpecified: -1 ether,
             sqrtPriceLimitX96: TickMath.MIN_SQRT_RATIO + 1
         });
@@ -291,7 +293,7 @@ contract TakeProfitsHookTest is Test, Deployers {
         );
     }
 
-    function test_multiple_orderExecute_zeroForOne() public {
+    function test_multiple_orderExecute_zeroForOne_onlyOne() public {
         PoolSwapTest.TestSettings memory testSettings = PoolSwapTest
             .TestSettings({
                 withdrawTokens: true,
@@ -300,7 +302,46 @@ contract TakeProfitsHookTest is Test, Deployers {
             });
 
         // Setup two zeroForOne orders at ticks 0 and 60
-        uint256 amount = 1 ether;
+        uint256 amount = 0.01 ether;
+
+        hook.placeOrder(key, 0, true, amount);
+        hook.placeOrder(key, 60, true, amount);
+
+        (, int24 currentTick, , ) = manager.getSlot0(key.toId());
+        assertEq(currentTick, 0);
+
+        // Do a swap to make tick increase beyond 60
+        IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
+            zeroForOne: false,
+            amountSpecified: -0.1 ether,
+            sqrtPriceLimitX96: TickMath.MAX_SQRT_RATIO - 1
+        });
+
+        swapRouter.swap(key, params, testSettings, ZERO_BYTES);
+
+        // Only one order should have been executed
+        // because the execution of that order would lower the tick
+        // so even though tick increased beyond 60
+        // the first order execution will lower it back down
+        // so order at tick = 60 will not be executed
+        uint256 tokensLeftToSell = hook.pendingOrders(key.toId(), 0, true);
+        assertEq(tokensLeftToSell, 0);
+
+        // Order at Tick 60 should still be pending
+        tokensLeftToSell = hook.pendingOrders(key.toId(), 60, true);
+        assertEq(tokensLeftToSell, amount);
+    }
+
+    function test_multiple_orderExecute_zeroForOne_both() public {
+        PoolSwapTest.TestSettings memory testSettings = PoolSwapTest
+            .TestSettings({
+                withdrawTokens: true,
+                settleUsingTransfer: true,
+                currencyAlreadySent: false
+            });
+
+        // Setup two zeroForOne orders at ticks 0 and 60
+        uint256 amount = 0.01 ether;
 
         hook.placeOrder(key, 0, true, amount);
         hook.placeOrder(key, 60, true, amount);
@@ -314,16 +355,11 @@ contract TakeProfitsHookTest is Test, Deployers {
 
         swapRouter.swap(key, params, testSettings, ZERO_BYTES);
 
-        // Only one order should have been executed
-        // because the execution of that order would lower the tick
-        // so even though tick increased to 120
-        // the first order execution will lower it back down
-        // so order at tick = 60 will not be executed
         uint256 tokensLeftToSell = hook.pendingOrders(key.toId(), 0, true);
         assertEq(tokensLeftToSell, 0);
 
         // Order at Tick 60 should still be pending
         tokensLeftToSell = hook.pendingOrders(key.toId(), 60, true);
-        assertEq(tokensLeftToSell, amount);
+        assertEq(tokensLeftToSell, 0);
     }
 }
