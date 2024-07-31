@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import {BaseHook} from "v4-periphery/BaseHook.sol";
+import {BaseHook} from "v4-periphery/src/base/hooks/BaseHook.sol";
 import {ERC1155} from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {Hooks} from "v4-core/libraries/Hooks.sol";
@@ -10,14 +10,17 @@ import {PoolId, PoolIdLibrary} from "v4-core/types/PoolId.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 
 import {Currency, CurrencyLibrary} from "v4-core/types/Currency.sol";
+import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
+
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {TickMath} from "v4-core/libraries/TickMath.sol";
 import {BalanceDelta} from "v4-core/types/BalanceDelta.sol";
 
-import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {FixedPointMathLib} from "solmate/src/utils/FixedPointMathLib.sol";
 
 contract TakeProfitsHook is BaseHook, ERC1155 {
+    using StateLibrary for IPoolManager;
     using PoolIdLibrary for PoolKey;
     using CurrencyLibrary for Currency;
     using FixedPointMathLib for uint256;
@@ -61,7 +64,11 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
                 beforeSwap: false,
                 afterSwap: true,
                 beforeDonate: false,
-                afterDonate: false
+                afterDonate: false,
+                beforeSwapReturnDelta: false,
+                afterSwapReturnDelta: false,
+                afterAddLiquidityReturnDelta: false,
+                afterRemoveLiquidityReturnDelta: false
             });
     }
 
@@ -71,7 +78,7 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
         uint160,
         int24 tick,
         bytes calldata
-    ) external override poolManagerOnly returns (bytes4) {
+    ) external override onlyByPoolManager returns (bytes4) {
         lastTicks[key.toId()] = tick;
         return this.afterInitialize.selector;
     }
@@ -82,8 +89,8 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
         IPoolManager.SwapParams calldata params,
         BalanceDelta,
         bytes calldata
-    ) external override poolManagerOnly returns (bytes4) {
-        if (sender == address(this)) return this.afterSwap.selector;
+    ) external override onlyByPoolManager returns (bytes4, int128) {
+        if (sender == address(this)) return (this.afterSwap.selector, 0);
 
         bool tryMore = true;
         int24 currentTick;
@@ -96,7 +103,7 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
         }
 
         lastTicks[key.toId()] = currentTick;
-        return this.afterSwap.selector;
+        return (this.afterSwap.selector, 0);
     }
 
     // Core Hook External Functions
@@ -261,8 +268,8 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
                 amountSpecified: -int256(inputAmount),
                 // No slippage limits (maximum slippage possible)
                 sqrtPriceLimitX96: zeroForOne
-                    ? TickMath.MIN_SQRT_RATIO + 1
-                    : TickMath.MAX_SQRT_RATIO - 1
+                    ? TickMath.MIN_SQRT_PRICE + 1
+                    : TickMath.MAX_SQRT_PRICE - 1
             })
         );
 
@@ -313,8 +320,9 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
 
     function _settle(Currency currency, uint128 amount) internal {
         // Transfer tokens to PM and let it know
+        poolManager.sync(currency);
         currency.transfer(address(poolManager), amount);
-        poolManager.settle(currency);
+        poolManager.settle();
     }
 
     function _take(Currency currency, uint128 amount) internal {

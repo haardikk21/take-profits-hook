@@ -6,13 +6,14 @@ import {Test} from "forge-std/Test.sol";
 
 import {Deployers} from "@uniswap/v4-core/test/utils/Deployers.sol";
 import {PoolSwapTest} from "v4-core/test/PoolSwapTest.sol";
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockERC20} from "solmate/src/test/utils/mocks/MockERC20.sol";
 
 import {PoolManager} from "v4-core/PoolManager.sol";
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 
 import {PoolId, PoolIdLibrary} from "v4-core/types/PoolId.sol";
 import {Currency, CurrencyLibrary} from "v4-core/types/Currency.sol";
+import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 
 import {Hooks} from "v4-core/libraries/Hooks.sol";
@@ -20,10 +21,10 @@ import {TickMath} from "v4-core/libraries/TickMath.sol";
 
 // Our contracts
 import {TakeProfitsHook} from "../src/TakeProfitsHook.sol";
-import {HookMiner} from "./utils/HookMiner.sol";
 
 contract TakeProfitsHookTest is Test, Deployers {
     // Use the libraries
+    using StateLibrary for IPoolManager;
     using PoolIdLibrary for PoolKey;
     using CurrencyLibrary for Currency;
 
@@ -44,14 +45,13 @@ contract TakeProfitsHookTest is Test, Deployers {
         uint160 flags = uint160(
             Hooks.AFTER_INITIALIZE_FLAG | Hooks.AFTER_SWAP_FLAG
         );
-        (, bytes32 salt) = HookMiner.find(
-            address(this),
-            flags,
-            0,
-            type(TakeProfitsHook).creationCode,
-            abi.encode(manager, "")
+        address hookAddress = address(flags);
+        deployCodeTo(
+            "TakeProfitsHook.sol",
+            abi.encode(manager, ""),
+            hookAddress
         );
-        hook = new TakeProfitsHook{salt: salt}(manager, "");
+        hook = TakeProfitsHook(hookAddress);
 
         // Approve our hook address to spend these tokens as well
         MockERC20(Currency.unwrap(token0)).approve(
@@ -69,7 +69,7 @@ contract TakeProfitsHookTest is Test, Deployers {
             token1,
             hook,
             3000,
-            SQRT_RATIO_1_1,
+            SQRT_PRICE_1_1,
             ZERO_BYTES
         );
 
@@ -81,7 +81,8 @@ contract TakeProfitsHookTest is Test, Deployers {
             IPoolManager.ModifyLiquidityParams({
                 tickLower: -60,
                 tickUpper: 60,
-                liquidityDelta: 10 ether
+                liquidityDelta: 10 ether,
+                salt: bytes32(0)
             }),
             ZERO_BYTES
         );
@@ -91,7 +92,8 @@ contract TakeProfitsHookTest is Test, Deployers {
             IPoolManager.ModifyLiquidityParams({
                 tickLower: -60,
                 tickUpper: 60,
-                liquidityDelta: 10 ether
+                liquidityDelta: 10 ether,
+                salt: bytes32(0)
             }),
             ZERO_BYTES
         );
@@ -101,7 +103,8 @@ contract TakeProfitsHookTest is Test, Deployers {
             IPoolManager.ModifyLiquidityParams({
                 tickLower: TickMath.minUsableTick(60),
                 tickUpper: TickMath.maxUsableTick(60),
-                liquidityDelta: 10 ether
+                liquidityDelta: 10 ether,
+                salt: bytes32(0)
             }),
             ZERO_BYTES
         );
@@ -204,15 +207,11 @@ contract TakeProfitsHookTest is Test, Deployers {
         IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
             zeroForOne: !zeroForOne,
             amountSpecified: -1 ether,
-            sqrtPriceLimitX96: TickMath.MAX_SQRT_RATIO - 1
+            sqrtPriceLimitX96: TickMath.MAX_SQRT_PRICE - 1
         });
 
         PoolSwapTest.TestSettings memory testSettings = PoolSwapTest
-            .TestSettings({
-                withdrawTokens: true,
-                settleUsingTransfer: true,
-                currencyAlreadySent: false
-            });
+            .TestSettings({takeClaims: false, settleUsingBurn: false});
 
         // Conduct the swap - `afterSwap` should also execute our placed order
         swapRouter.swap(key, params, testSettings, ZERO_BYTES);
@@ -256,15 +255,11 @@ contract TakeProfitsHookTest is Test, Deployers {
         IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
             zeroForOne: true,
             amountSpecified: -1 ether,
-            sqrtPriceLimitX96: TickMath.MIN_SQRT_RATIO + 1
+            sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
         });
 
         PoolSwapTest.TestSettings memory testSettings = PoolSwapTest
-            .TestSettings({
-                withdrawTokens: true,
-                settleUsingTransfer: true,
-                currencyAlreadySent: false
-            });
+            .TestSettings({takeClaims: false, settleUsingBurn: false});
 
         swapRouter.swap(key, params, testSettings, ZERO_BYTES);
 
@@ -295,11 +290,7 @@ contract TakeProfitsHookTest is Test, Deployers {
 
     function test_multiple_orderExecute_zeroForOne_onlyOne() public {
         PoolSwapTest.TestSettings memory testSettings = PoolSwapTest
-            .TestSettings({
-                withdrawTokens: true,
-                settleUsingTransfer: true,
-                currencyAlreadySent: false
-            });
+            .TestSettings({takeClaims: false, settleUsingBurn: false});
 
         // Setup two zeroForOne orders at ticks 0 and 60
         uint256 amount = 0.01 ether;
@@ -314,7 +305,7 @@ contract TakeProfitsHookTest is Test, Deployers {
         IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
             zeroForOne: false,
             amountSpecified: -0.1 ether,
-            sqrtPriceLimitX96: TickMath.MAX_SQRT_RATIO - 1
+            sqrtPriceLimitX96: TickMath.MAX_SQRT_PRICE - 1
         });
 
         swapRouter.swap(key, params, testSettings, ZERO_BYTES);
@@ -334,11 +325,7 @@ contract TakeProfitsHookTest is Test, Deployers {
 
     function test_multiple_orderExecute_zeroForOne_both() public {
         PoolSwapTest.TestSettings memory testSettings = PoolSwapTest
-            .TestSettings({
-                withdrawTokens: true,
-                settleUsingTransfer: true,
-                currencyAlreadySent: false
-            });
+            .TestSettings({takeClaims: false, settleUsingBurn: false});
 
         // Setup two zeroForOne orders at ticks 0 and 60
         uint256 amount = 0.01 ether;
@@ -350,7 +337,7 @@ contract TakeProfitsHookTest is Test, Deployers {
         IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
             zeroForOne: false,
             amountSpecified: -0.5 ether,
-            sqrtPriceLimitX96: TickMath.MAX_SQRT_RATIO - 1
+            sqrtPriceLimitX96: TickMath.MAX_SQRT_PRICE - 1
         });
 
         swapRouter.swap(key, params, testSettings, ZERO_BYTES);
