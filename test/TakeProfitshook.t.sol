@@ -90,8 +90,8 @@ contract TakeProfitsHookTest is Test, Deployers {
         modifyLiquidityRouter.modifyLiquidity(
             key,
             IPoolManager.ModifyLiquidityParams({
-                tickLower: -60,
-                tickUpper: 60,
+                tickLower: -120,
+                tickUpper: 120,
                 liquidityDelta: 10 ether,
                 salt: bytes32(0)
             }),
