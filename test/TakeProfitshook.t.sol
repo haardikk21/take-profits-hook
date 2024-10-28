@@ -69,8 +69,7 @@ contract TakeProfitsHookTest is Test, Deployers {
             token1,
             hook,
             3000,
-            SQRT_PRICE_1_1,
-            ZERO_BYTES
+            SQRT_PRICE_1_1
         );
 
         // Add initial liquidity to the pool

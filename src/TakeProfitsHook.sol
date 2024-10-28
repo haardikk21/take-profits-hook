@@ -76,9 +76,8 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
         address,
         PoolKey calldata key,
         uint160,
-        int24 tick,
-        bytes calldata
-    ) external override onlyByPoolManager returns (bytes4) {
+        int24 tick
+    ) external override onlyPoolManager returns (bytes4) {
         lastTicks[key.toId()] = tick;
         return this.afterInitialize.selector;
     }
@@ -89,7 +88,7 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
         IPoolManager.SwapParams calldata params,
         BalanceDelta,
         bytes calldata
-    ) external override onlyByPoolManager returns (bytes4, int128) {
+    ) external override onlyPoolManager returns (bytes4, int128) {
         // `sender` is the address which initiated the swap
         // if `sender` is the hook, we don't want to go down the `afterSwap`
         // rabbit hole again
