@@ -76,9 +76,8 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
         address,
         PoolKey calldata key,
         uint160,
-        int24 tick,
-        bytes calldata
-    ) external override onlyByPoolManager returns (bytes4) {
+        int24 tick
+    ) external override onlyPoolManager returns (bytes4) {
         lastTicks[key.toId()] = tick;
         return this.afterInitialize.selector;
     }
@@ -89,7 +88,7 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
         IPoolManager.SwapParams calldata params,
         BalanceDelta,
         bytes calldata
-    ) external override onlyByPoolManager returns (bytes4, int128) {
+    ) external override onlyPoolManager returns (bytes4, int128) {
         // `sender` is the address which initiated the swap
         // if `sender` is the hook, we don't want to go down the `afterSwap`
         // rabbit hole again
@@ -154,7 +153,8 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
     function cancelOrder(
         PoolKey calldata key,
         int24 tickToSellAt,
-        bool zeroForOne
+        bool zeroForOne,
+        uint256 amountToCancel
     ) external {
         // Get lower actually usable tick for their order
         int24 tick = getLowerUsableTick(tickToSellAt, key.tickSpacing);
@@ -162,18 +162,17 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
 
         // Check how many claim tokens they have for this position
         uint256 positionTokens = balanceOf(msg.sender, positionId);
-        if (positionTokens == 0) revert InvalidOrder();
+        if (positionTokens < amountToCancel) revert NotEnoughToClaim();
 
-        // Remove their `positionTokens` worth of position from pending orders
-        // NOTE: We don't want to zero this out directly because other users may have the same position
-        pendingOrders[key.toId()][tick][zeroForOne] -= positionTokens;
+        // Remove their `amountToCancel` worth of position from pending orders
+        pendingOrders[key.toId()][tick][zeroForOne] -= amountToCancel;
         // Reduce claim token total supply and burn their share
-        claimTokensSupply[positionId] -= positionTokens;
-        _burn(msg.sender, positionId, positionTokens);
+        claimTokensSupply[positionId] -= amountToCancel;
+        _burn(msg.sender, positionId, amountToCancel);
 
         // Send them their input token
         Currency token = zeroForOne ? key.currency0 : key.currency1;
-        token.transfer(msg.sender, positionTokens);
+        token.transfer(msg.sender, amountToCancel);
     }
 
     function redeem(

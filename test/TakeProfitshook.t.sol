@@ -64,14 +64,7 @@ contract TakeProfitsHookTest is Test, Deployers {
         );
 
         // Initialize a pool with these two tokens
-        (key, ) = initPool(
-            token0,
-            token1,
-            hook,
-            3000,
-            SQRT_PRICE_1_1,
-            ZERO_BYTES
-        );
+        (key, ) = initPool(token0, token1, hook, 3000, SQRT_PRICE_1_1);
 
         // Add initial liquidity to the pool
 
@@ -184,7 +177,7 @@ contract TakeProfitsHookTest is Test, Deployers {
         assertEq(tokenBalance, amount);
 
         // Cancel the order
-        hook.cancelOrder(key, tickLower, zeroForOne);
+        hook.cancelOrder(key, tickLower, zeroForOne, amount);
 
         // Check that we received our token0 tokens back, and no longer own any ERC-1155 tokens
         uint256 finalBalance = token0.balanceOfSelf();
