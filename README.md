@@ -45,6 +45,39 @@ Assuming an order has now been placed:
 2. How do we know th price is right? Figuring out the "when" to execute the order
 3. How do we send/let the user redeem their output tokens from their order
 
+#### Side Detour - Ticks vs Sqrt Price
+
+When placing a limit order, how should users specify their selling price? Should we use ticks or Sqrt Prices here?
+
+We should use ticks at valid tick spacings. Why? Gas.
+
+Think about a hypothetical high level flow with sqrt prices
+
+```
+function afterSwap() {
+
+   previousSqrtPrice = (1 * 2^96) = 79228162514264337593543950336
+   currentSqrtPrice = (1.1 * 2^96) = 87150978765690771352898345369
+
+   if (currentSqrtPrice > previousSqrtPrice) {
+      for (i = previousSqrtPrice; i < currentSqrtPrice; i++) {
+         if (order exists to sell token0 at price i) {
+            execute
+         }
+      }
+   } else {
+      for (i = currentSqrtPrice; i > previousSqrtPrice; i--) {
+         if (order exists to sell token1 at price i) {
+            execute
+         }
+      }
+   }
+}
+
+```
+
+TOO MANY LOOP ITERATIONS
+
 ---
 
 Assume there's a pool of tokens A and B. We'll treat A as the Token 0, and B as the Token 1.

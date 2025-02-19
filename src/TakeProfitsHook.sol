@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import {BaseHook} from "v4-periphery/src/base/hooks/BaseHook.sol";
+import {BaseHook} from "v4-periphery/src/utils/BaseHook.sol";
 import {ERC1155} from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {Hooks} from "v4-core/libraries/Hooks.sol";
@@ -72,23 +72,23 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
             });
     }
 
-    function afterInitialize(
+    function _afterInitialize(
         address,
         PoolKey calldata key,
         uint160,
         int24 tick
-    ) external override onlyPoolManager returns (bytes4) {
+    ) internal override returns (bytes4) {
         lastTicks[key.toId()] = tick;
         return this.afterInitialize.selector;
     }
 
-    function afterSwap(
+    function _afterSwap(
         address sender,
         PoolKey calldata key,
         IPoolManager.SwapParams calldata params,
         BalanceDelta,
         bytes calldata
-    ) external override onlyPoolManager returns (bytes4, int128) {
+    ) internal override returns (bytes4, int128) {
         // `sender` is the address which initiated the swap
         // if `sender` is the hook, we don't want to go down the `afterSwap`
         // rabbit hole again
