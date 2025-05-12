@@ -7,6 +7,7 @@ import {Test} from "forge-std/Test.sol";
 import {Deployers} from "@uniswap/v4-core/test/utils/Deployers.sol";
 import {PoolSwapTest} from "v4-core/test/PoolSwapTest.sol";
 import {MockERC20} from "solmate/src/test/utils/mocks/MockERC20.sol";
+import {SwapParams, ModifyLiquidityParams} from "v4-core/types/PoolOperation.sol";
 
 import {PoolManager} from "v4-core/PoolManager.sol";
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
@@ -71,7 +72,7 @@ contract TakeProfitsHookTest is Test, Deployers {
         // Some liquidity from -60 to +60 tick range
         modifyLiquidityRouter.modifyLiquidity(
             key,
-            IPoolManager.ModifyLiquidityParams({
+            ModifyLiquidityParams({
                 tickLower: -60,
                 tickUpper: 60,
                 liquidityDelta: 10 ether,
@@ -82,7 +83,7 @@ contract TakeProfitsHookTest is Test, Deployers {
         // Some liquidity from -120 to +120 tick range
         modifyLiquidityRouter.modifyLiquidity(
             key,
-            IPoolManager.ModifyLiquidityParams({
+            ModifyLiquidityParams({
                 tickLower: -120,
                 tickUpper: 120,
                 liquidityDelta: 10 ether,
@@ -93,7 +94,7 @@ contract TakeProfitsHookTest is Test, Deployers {
         // some liquidity for full range
         modifyLiquidityRouter.modifyLiquidity(
             key,
-            IPoolManager.ModifyLiquidityParams({
+            ModifyLiquidityParams({
                 tickLower: TickMath.minUsableTick(60),
                 tickUpper: TickMath.maxUsableTick(60),
                 liquidityDelta: 10 ether,
@@ -149,12 +150,12 @@ contract TakeProfitsHookTest is Test, Deployers {
         assertEq(originalBalance - newBalance, amount);
 
         // Check the balance of ERC-1155 tokens we received
-        uint256 positionId = hook.getPositionId(key, tickLower, zeroForOne);
-        uint256 tokenBalance = hook.balanceOf(address(this), positionId);
+        uint256 orderId = hook.getOrderId(key, tickLower, zeroForOne);
+        uint256 tokenBalance = hook.balanceOf(address(this), orderId);
 
         // Ensure that we were, in fact, given ERC-1155 tokens for the order
         // equal to the `amount` of token0 tokens we placed the order for
-        assertTrue(positionId != 0);
+        assertTrue(orderId != 0);
         assertEq(tokenBalance, amount);
     }
 
@@ -172,8 +173,8 @@ contract TakeProfitsHookTest is Test, Deployers {
         assertEq(originalBalance - newBalance, amount);
 
         // Check the balance of ERC-1155 tokens we received
-        uint256 positionId = hook.getPositionId(key, tickLower, zeroForOne);
-        uint256 tokenBalance = hook.balanceOf(address(this), positionId);
+        uint256 orderId = hook.getOrderId(key, tickLower, zeroForOne);
+        uint256 tokenBalance = hook.balanceOf(address(this), orderId);
         assertEq(tokenBalance, amount);
 
         // Cancel the order
@@ -183,7 +184,7 @@ contract TakeProfitsHookTest is Test, Deployers {
         uint256 finalBalance = token0.balanceOfSelf();
         assertEq(finalBalance, originalBalance);
 
-        tokenBalance = hook.balanceOf(address(this), positionId);
+        tokenBalance = hook.balanceOf(address(this), orderId);
         assertEq(tokenBalance, 0);
     }
 
@@ -197,7 +198,7 @@ contract TakeProfitsHookTest is Test, Deployers {
 
         // Do a separate swap from oneForZero to make tick go up
         // Sell 1e18 token1 tokens for token0 tokens
-        IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
+        SwapParams memory params = SwapParams({
             zeroForOne: !zeroForOne,
             amountSpecified: -1 ether,
             sqrtPriceLimitX96: TickMath.MAX_SQRT_PRICE - 1
@@ -219,8 +220,8 @@ contract TakeProfitsHookTest is Test, Deployers {
         assertEq(pendingTokensForPosition, 0);
 
         // Check that the hook contract has the expected number of token1 tokens ready to redeem
-        uint256 positionId = hook.getPositionId(key, tickLower, zeroForOne);
-        uint256 claimableOutputTokens = hook.claimableOutputTokens(positionId);
+        uint256 orderId = hook.getOrderId(key, tickLower, zeroForOne);
+        uint256 claimableOutputTokens = hook.claimableOutputTokens(orderId);
         uint256 hookContractToken1Balance = token1.balanceOf(address(hook));
         assertEq(claimableOutputTokens, hookContractToken1Balance);
 
@@ -245,7 +246,7 @@ contract TakeProfitsHookTest is Test, Deployers {
 
         // Do a separate swap from zeroForOne to make tick go down
         // Sell 1e18 token0 tokens for token1 tokens
-        IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
+        SwapParams memory params = SwapParams({
             zeroForOne: true,
             amountSpecified: -1 ether,
             sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
@@ -265,8 +266,8 @@ contract TakeProfitsHookTest is Test, Deployers {
         assertEq(tokensLeftToSell, 0);
 
         // Check that the hook contract has the expected number of token0 tokens ready to redeem
-        uint256 positionId = hook.getPositionId(key, tickLower, zeroForOne);
-        uint256 claimableOutputTokens = hook.claimableOutputTokens(positionId);
+        uint256 orderId = hook.getOrderId(key, tickLower, zeroForOne);
+        uint256 claimableOutputTokens = hook.claimableOutputTokens(orderId);
         uint256 hookContractToken0Balance = token0.balanceOf(address(hook));
         assertEq(claimableOutputTokens, hookContractToken0Balance);
 
@@ -295,7 +296,7 @@ contract TakeProfitsHookTest is Test, Deployers {
         assertEq(currentTick, 0);
 
         // Do a swap to make tick increase beyond 60
-        IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
+        SwapParams memory params = SwapParams({
             zeroForOne: false,
             amountSpecified: -0.1 ether,
             sqrtPriceLimitX96: TickMath.MAX_SQRT_PRICE - 1
@@ -327,7 +328,7 @@ contract TakeProfitsHookTest is Test, Deployers {
         hook.placeOrder(key, 60, true, amount);
 
         // Do a swap to make tick increase
-        IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
+        SwapParams memory params = SwapParams({
             zeroForOne: false,
             amountSpecified: -0.5 ether,
             sqrtPriceLimitX96: TickMath.MAX_SQRT_PRICE - 1
