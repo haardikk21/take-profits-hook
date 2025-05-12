@@ -21,14 +21,13 @@ import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {Hooks} from "v4-core/libraries/Hooks.sol";
 import {TickMath} from "v4-core/libraries/TickMath.sol";
 
-// Our contracts
+import {ERC1155Holder} from "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
+
 import {TakeProfitsHook} from "../src/TakeProfitsHook.sol";
 
-contract TakeProfitsHookTest is Test, Deployers {
+contract TakeProfitsHookTest is Test, Deployers, ERC1155Holder {
     // Use the libraries
     using StateLibrary for IPoolManager;
-    using PoolIdLibrary for PoolKey;
-    using CurrencyLibrary for Currency;
 
     // The two currencies (tokens) from the pool
     Currency token0;
@@ -103,26 +102,6 @@ contract TakeProfitsHookTest is Test, Deployers {
             }),
             ZERO_BYTES
         );
-    }
-
-    function onERC1155Received(
-        address,
-        address,
-        uint256,
-        uint256,
-        bytes calldata
-    ) external pure returns (bytes4) {
-        return this.onERC1155Received.selector;
-    }
-
-    function onERC1155BatchReceived(
-        address,
-        address,
-        uint256[] calldata,
-        uint256[] calldata,
-        bytes calldata
-    ) external pure returns (bytes4) {
-        return this.onERC1155BatchReceived.selector;
     }
 
     function test_placeOrder() public {

@@ -22,8 +22,6 @@ import {FixedPointMathLib} from "solmate/src/utils/FixedPointMathLib.sol";
 
 contract TakeProfitsHook is BaseHook, ERC1155 {
     using StateLibrary for IPoolManager;
-    using PoolIdLibrary for PoolKey;
-    using CurrencyLibrary for Currency;
     using FixedPointMathLib for uint256;
 
     // Storage
@@ -190,8 +188,8 @@ contract TakeProfitsHook is BaseHook, ERC1155 {
         if (claimableOutputTokens[orderId] == 0) revert NothingToClaim();
 
         // they must have claim tokens >= inputAmountToClaimFor
-        uint256 positionTokens = balanceOf(msg.sender, orderId);
-        if (positionTokens < inputAmountToClaimFor) revert NotEnoughToClaim();
+        uint256 claimTokens = balanceOf(msg.sender, orderId);
+        if (claimTokens < inputAmountToClaimFor) revert NotEnoughToClaim();
 
         uint256 totalClaimableForPosition = claimableOutputTokens[orderId];
         uint256 totalInputAmountForPosition = claimTokensSupply[orderId];
