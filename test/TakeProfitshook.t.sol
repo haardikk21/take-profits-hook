@@ -29,10 +29,6 @@ contract TakeProfitsHookTest is Test, Deployers, ERC1155Holder {
     // Use the libraries
     using StateLibrary for IPoolManager;
 
-    // The two currencies (tokens) from the pool
-    Currency token0;
-    Currency token1;
-
     TakeProfitsHook hook;
 
     function setUp() public {
@@ -40,7 +36,7 @@ contract TakeProfitsHookTest is Test, Deployers, ERC1155Holder {
         deployFreshManagerAndRouters();
 
         // Deploy two test tokens
-        (token0, token1) = deployMintAndApprove2Currencies();
+        (currency0, currency1) = deployMintAndApprove2Currencies();
 
         // Deploy our hook
         uint160 flags = uint160(
@@ -55,17 +51,17 @@ contract TakeProfitsHookTest is Test, Deployers, ERC1155Holder {
         hook = TakeProfitsHook(hookAddress);
 
         // Approve our hook address to spend these tokens as well
-        MockERC20(Currency.unwrap(token0)).approve(
+        MockERC20(Currency.unwrap(currency0)).approve(
             address(hook),
             type(uint256).max
         );
-        MockERC20(Currency.unwrap(token1)).approve(
+        MockERC20(Currency.unwrap(currency1)).approve(
             address(hook),
             type(uint256).max
         );
 
         // Initialize a pool with these two tokens
-        (key, ) = initPool(token0, token1, hook, 3000, SQRT_PRICE_1_1);
+        (key, ) = initPool(currency0, currency1, hook, 3000, SQRT_PRICE_1_1);
 
         // Add initial liquidity to the pool
 
@@ -106,27 +102,27 @@ contract TakeProfitsHookTest is Test, Deployers, ERC1155Holder {
 
     function test_placeOrder() public {
         // Place a zeroForOne take-profit order
-        // for 10e18 token0 tokens
+        // for 10e18 currency0 tokens
         // at tick 100
         int24 tick = 100;
         uint256 amount = 10e18;
         bool zeroForOne = true;
 
-        // Note the original balance of token0 we have
-        uint256 originalBalance = token0.balanceOfSelf();
+        // Note the original balance of currency0 we have
+        uint256 originalBalance = currency0.balanceOfSelf();
 
         // Place the order
         int24 tickLower = hook.placeOrder(key, tick, zeroForOne, amount);
 
-        // Note the new balance of token0 we have
-        uint256 newBalance = token0.balanceOfSelf();
+        // Note the new balance of currency0 we have
+        uint256 newBalance = currency0.balanceOfSelf();
 
         // Since we deployed the pool contract with tick spacing = 60
         // i.e. the tick can only be a multiple of 60
         // the tickLower should be 60 since we placed an order at tick 100
         assertEq(tickLower, 60);
 
-        // Ensure that our balance of token0 was reduced by `amount` tokens
+        // Ensure that our balance of currency0 was reduced by `amount` tokens
         assertEq(originalBalance - newBalance, amount);
 
         // Check the balance of ERC-1155 tokens we received
@@ -134,7 +130,7 @@ contract TakeProfitsHookTest is Test, Deployers, ERC1155Holder {
         uint256 tokenBalance = hook.balanceOf(address(this), orderId);
 
         // Ensure that we were, in fact, given ERC-1155 tokens for the order
-        // equal to the `amount` of token0 tokens we placed the order for
+        // equal to the `amount` of currency0 tokens we placed the order for
         assertTrue(orderId != 0);
         assertEq(tokenBalance, amount);
     }
@@ -145,9 +141,9 @@ contract TakeProfitsHookTest is Test, Deployers, ERC1155Holder {
         uint256 amount = 10e18;
         bool zeroForOne = true;
 
-        uint256 originalBalance = token0.balanceOfSelf();
+        uint256 originalBalance = currency0.balanceOfSelf();
         int24 tickLower = hook.placeOrder(key, tick, zeroForOne, amount);
-        uint256 newBalance = token0.balanceOfSelf();
+        uint256 newBalance = currency0.balanceOfSelf();
 
         assertEq(tickLower, 60);
         assertEq(originalBalance - newBalance, amount);
@@ -160,8 +156,8 @@ contract TakeProfitsHookTest is Test, Deployers, ERC1155Holder {
         // Cancel the order
         hook.cancelOrder(key, tickLower, zeroForOne, amount);
 
-        // Check that we received our token0 tokens back, and no longer own any ERC-1155 tokens
-        uint256 finalBalance = token0.balanceOfSelf();
+        // Check that we received our currency0 tokens back, and no longer own any ERC-1155 tokens
+        uint256 finalBalance = currency0.balanceOfSelf();
         assertEq(finalBalance, originalBalance);
 
         tokenBalance = hook.balanceOf(address(this), orderId);
@@ -173,11 +169,11 @@ contract TakeProfitsHookTest is Test, Deployers, ERC1155Holder {
         uint256 amount = 1 ether;
         bool zeroForOne = true;
 
-        // Place our order at tick 100 for 10e18 token0 tokens
+        // Place our order at tick 100 for 10e18 currency0 tokens
         int24 tickLower = hook.placeOrder(key, tick, zeroForOne, amount);
 
         // Do a separate swap from oneForZero to make tick go up
-        // Sell 1e18 token1 tokens for token0 tokens
+        // Sell 1e18 currency1 tokens for currency0 tokens
         SwapParams memory params = SwapParams({
             zeroForOne: !zeroForOne,
             amountSpecified: -1 ether,
@@ -199,19 +195,21 @@ contract TakeProfitsHookTest is Test, Deployers, ERC1155Holder {
         );
         assertEq(pendingTokensForPosition, 0);
 
-        // Check that the hook contract has the expected number of token1 tokens ready to redeem
+        // Check that the hook contract has the expected number of currency1 tokens ready to redeem
         uint256 orderId = hook.getOrderId(key, tickLower, zeroForOne);
         uint256 claimableOutputTokens = hook.claimableOutputTokens(orderId);
-        uint256 hookContractToken1Balance = token1.balanceOf(address(hook));
-        assertEq(claimableOutputTokens, hookContractToken1Balance);
+        uint256 hookContractcurrency1Balance = currency1.balanceOf(
+            address(hook)
+        );
+        assertEq(claimableOutputTokens, hookContractcurrency1Balance);
 
-        // Ensure we can redeem the token1 tokens
-        uint256 originalToken1Balance = token1.balanceOf(address(this));
+        // Ensure we can redeem the currency1 tokens
+        uint256 originalcurrency1Balance = currency1.balanceOf(address(this));
         hook.redeem(key, tick, zeroForOne, amount);
-        uint256 newToken1Balance = token1.balanceOf(address(this));
+        uint256 newcurrency1Balance = currency1.balanceOf(address(this));
 
         assertEq(
-            newToken1Balance - originalToken1Balance,
+            newcurrency1Balance - originalcurrency1Balance,
             claimableOutputTokens
         );
     }
@@ -221,11 +219,11 @@ contract TakeProfitsHookTest is Test, Deployers, ERC1155Holder {
         uint256 amount = 10 ether;
         bool zeroForOne = false;
 
-        // Place our order at tick -100 for 10e18 token1 tokens
+        // Place our order at tick -100 for 10e18 currency1 tokens
         int24 tickLower = hook.placeOrder(key, tick, zeroForOne, amount);
 
         // Do a separate swap from zeroForOne to make tick go down
-        // Sell 1e18 token0 tokens for token1 tokens
+        // Sell 1e18 currency0 tokens for currency1 tokens
         SwapParams memory params = SwapParams({
             zeroForOne: true,
             amountSpecified: -1 ether,
@@ -245,19 +243,21 @@ contract TakeProfitsHookTest is Test, Deployers, ERC1155Holder {
         );
         assertEq(tokensLeftToSell, 0);
 
-        // Check that the hook contract has the expected number of token0 tokens ready to redeem
+        // Check that the hook contract has the expected number of currency0 tokens ready to redeem
         uint256 orderId = hook.getOrderId(key, tickLower, zeroForOne);
         uint256 claimableOutputTokens = hook.claimableOutputTokens(orderId);
-        uint256 hookContractToken0Balance = token0.balanceOf(address(hook));
-        assertEq(claimableOutputTokens, hookContractToken0Balance);
+        uint256 hookContractcurrency0Balance = currency0.balanceOf(
+            address(hook)
+        );
+        assertEq(claimableOutputTokens, hookContractcurrency0Balance);
 
-        // Ensure we can redeem the token0 tokens
-        uint256 originalToken0Balance = token0.balanceOfSelf();
+        // Ensure we can redeem the currency0 tokens
+        uint256 originalcurrency0Balance = currency0.balanceOfSelf();
         hook.redeem(key, tick, zeroForOne, amount);
-        uint256 newToken0Balance = token0.balanceOfSelf();
+        uint256 newcurrency0Balance = currency0.balanceOfSelf();
 
         assertEq(
-            newToken0Balance - originalToken0Balance,
+            newcurrency0Balance - originalcurrency0Balance,
             claimableOutputTokens
         );
     }

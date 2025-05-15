@@ -53,7 +53,7 @@ We should use ticks at valid tick spacings. Why? Gas.
 
 Think about a hypothetical high level flow with sqrt prices
 
-```
+```solidity
 function afterSwap() {
 
    previousSqrtPrice = (1 * 2^96) = 79228162514264337593543950336
@@ -114,3 +114,5 @@ When do these tick values change? Swaps
    2.1. When alice places her order, ideally - she should also set some sort of slippage (some sort of minimum token B to get back).
 
 3. We're not going to support pools that have native ETH token as one of the currencies. We only support ERC20-ERC20 pools.
+
+https://atriumacademy.typeform.com/to/Z7Ad4he
