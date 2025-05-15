@@ -64,30 +64,6 @@ contract TakeProfitsHookTest is Test, Deployers, ERC1155Holder {
         (key, ) = initPool(currency0, currency1, hook, 3000, SQRT_PRICE_1_1);
 
         // Add initial liquidity to the pool
-
-        // Some liquidity from -60 to +60 tick range
-        modifyLiquidityRouter.modifyLiquidity(
-            key,
-            ModifyLiquidityParams({
-                tickLower: -60,
-                tickUpper: 60,
-                liquidityDelta: 10 ether,
-                salt: bytes32(0)
-            }),
-            ZERO_BYTES
-        );
-        // Some liquidity from -120 to +120 tick range
-        modifyLiquidityRouter.modifyLiquidity(
-            key,
-            ModifyLiquidityParams({
-                tickLower: -120,
-                tickUpper: 120,
-                liquidityDelta: 10 ether,
-                salt: bytes32(0)
-            }),
-            ZERO_BYTES
-        );
-        // some liquidity for full range
         modifyLiquidityRouter.modifyLiquidity(
             key,
             ModifyLiquidityParams({
@@ -270,12 +246,12 @@ contract TakeProfitsHookTest is Test, Deployers, ERC1155Holder {
         uint256 amount = 0.01 ether;
 
         hook.placeOrder(key, 0, true, amount);
-        hook.placeOrder(key, 60, true, amount);
+        hook.placeOrder(key, 180, true, amount);
 
         (, int24 currentTick, , ) = manager.getSlot0(key.toId());
         assertEq(currentTick, 0);
 
-        // Do a swap to make tick increase beyond 60
+        // Do a swap to make tick increase beyond 180
         SwapParams memory params = SwapParams({
             zeroForOne: false,
             amountSpecified: -0.1 ether,
@@ -286,14 +262,14 @@ contract TakeProfitsHookTest is Test, Deployers, ERC1155Holder {
 
         // Only one order should have been executed
         // because the execution of that order would lower the tick
-        // so even though tick increased beyond 60
+        // so even though tick increased beyond 180
         // the first order execution will lower it back down
-        // so order at tick = 60 will not be executed
+        // so order at tick = 180 will not be executed
         uint256 tokensLeftToSell = hook.pendingOrders(key.toId(), 0, true);
         assertEq(tokensLeftToSell, 0);
 
-        // Order at Tick 60 should still be pending
-        tokensLeftToSell = hook.pendingOrders(key.toId(), 60, true);
+        // Order at Tick 180 should still be pending
+        tokensLeftToSell = hook.pendingOrders(key.toId(), 180, true);
         assertEq(tokensLeftToSell, amount);
     }
 
