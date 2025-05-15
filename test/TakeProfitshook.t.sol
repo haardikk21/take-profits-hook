@@ -36,7 +36,7 @@ contract TakeProfitsHookTest is Test, Deployers, ERC1155Holder {
         deployFreshManagerAndRouters();
 
         // Deploy two test tokens
-        (currency0, currency1) = deployMintAndApprove2Currencies();
+        deployMintAndApprove2Currencies();
 
         // Deploy our hook
         uint160 flags = uint160(
